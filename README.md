@@ -14,7 +14,7 @@ The official weights are 27 GB, which does not fit a free T4 (16 GB of GPU memor
 2. Run the cells from the top. The first run downloads about 25 GB (around 15 minutes) and loading takes about 2.5 minutes.
 3. Edit the prompt in the last cell and run it. A 768×768 picture takes about 2 minutes.
 
-The model files live on Colab's disk for the session only. A new session downloads them again (free Drive space, 15 GB, is too small to keep them).
+The model files live on Colab's disk for the session only. A new session downloads them again, because a free Drive (15 GB) is too small for a 27 GB model. See *Model storage* below.
 
 ## What it makes
 
@@ -46,6 +46,21 @@ For comparison, the model card's own example uses 50 steps and bfloat16 on a lar
 - **Why not 4-bit for the image model too?** I tried it first. The model's own code reads `layer.weight.dtype` to decide what type to compute in, and a 4-bit `bitsandbytes` layer stores its weights as packed bytes, so the code crashed with `expected scalar type Float but found Byte`. `optimum-quanto` weights report their normal dtype, so the unmodified code works. Patching those dtype lookups and removing CPU offload did not fix the 4-bit version, so I did not pursue it further.
 - **float16, not bfloat16.** The T4 has no native bfloat16. Our test pictures came out clean in float16 (no NaNs, no black images).
 - **`torchao` is uninstalled.** Colab ships a `torchao` older than `diffusers` 0.41 expects, which breaks `import diffusers` with `cannot import name 'FqnToConfig'`. Nothing here uses `torchao`.
+
+## Model storage (Google Drive)
+
+The notebook uses a small helper, `get_model()`, instead of a plain download:
+
+1. It mounts Google Drive (Colab asks you to allow it) and keeps models in `MyDrive/colab-models/moss-image-sft`.
+2. If a **complete** copy is already there, it is used as it is, with no download. A copy counts as complete only when a marker file was written after a finished download.
+3. If it is missing, the helper asks Hugging Face how big the download is and compares that with your free Drive space. If it fits, it downloads straight into Drive. If it does not fit, it uses the session's disk and tells you.
+4. An interrupted download is resumed, not restarted. Nothing is ever deleted.
+
+At about 27 GB it **does not fit** in a free Google Drive (15 GB in total, shared with all your files), so on a free account it still downloads to the session's disk every time. With a Drive that has enough free space (for example Google One), the first run saves it and later sessions reuse it.
+
+Say no to the Drive prompt, or set `USE_DRIVE = False` in the helper cell, to always use the session's disk.
+
+**The Google Drive step is new and has not been run in Colab yet.** The model-download cell in this notebook was replaced by `get_model()` after the tested run described here. I tested that helper's logic on its own against a real Hugging Face repo with a stand-in Drive folder (five cases: downloads into Drive, reuses a finished copy without downloading, falls back to the local disk when Drive is too small, repairs an interrupted download, and the `USE_DRIVE = False` switch), and I checked that every notebook cell parses. I have not run the real Drive mount (it needs your click to allow access), nor the edited notebook end to end. If something fails, please open an issue with the error text.
 
 ## Limits and honest notes
 
